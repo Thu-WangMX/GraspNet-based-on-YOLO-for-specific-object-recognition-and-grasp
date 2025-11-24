@@ -25,6 +25,15 @@ GRASPNET_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(GRASPNET_ROOT, 'models'))
 sys.path.append(os.path.join(GRASPNET_ROOT, 'dataset'))
 sys.path.append(os.path.join(GRASPNET_ROOT, 'utils'))
+# 当前这个文件所在的目录：/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# robot-stain-perception/tools 目录
+TOOLS_DIR = os.path.join(ROOT_DIR, "robot-stain-perception", "tools")
+
+# 加到 sys.path 里
+if TOOLS_DIR not in sys.path:
+    sys.path.append(TOOLS_DIR)
 
 from graspnet import GraspNet, pred_decode
 from graspnetAPI import GraspGroup
@@ -292,28 +301,28 @@ def perform_complete_grasp_cycle(net, robot, trajectory_planner, workspace_mask_
             planner_name="s_curve", speed=0.2, acc=0.1, duration=10.0, num_samples=5
         )
         
-        print("  > 正在前往垃圾桶...")
-        trajectory_planner.execute_cartesian_trajectory(
-            robot=robot, start_pose=goal_pose_up, goal_pose=bin_pose_up,
-            planner_name="sqp", speed=0.2, acc=0.1, duration=10.0, num_samples=5
-        )
+        # print("  > 正在前往垃圾桶...")
+        # trajectory_planner.execute_cartesian_trajectory(
+        #     robot=robot, start_pose=goal_pose_up, goal_pose=bin_pose_up,
+        #     planner_name="sqp", speed=0.2, acc=0.1, duration=10.0, num_samples=5
+        # )
 
 
 
-        print("  > 正在返回抓取起始点...")
-        trajectory_planner.execute_cartesian_trajectory(
-            robot=robot, start_pose=bin_pose_up, goal_pose=bin_pose,
-            planner_name="sqp", speed=0.2, acc=0.1, duration=10.0, num_samples=5
-        )
+        # print("  > 正在返回抓取起始点...")
+        # trajectory_planner.execute_cartesian_trajectory(
+        #     robot=robot, start_pose=bin_pose_up, goal_pose=bin_pose,
+        #     planner_name="sqp", speed=0.2, acc=0.1, duration=10.0, num_samples=5
+        # )
 
-        print("  > 正在扔入垃圾桶...")
-        robot.Move_gripper(GRIPPER_OPEN_WIDTH, GRIPPER_SPEED, GRIPPER_FORCE)
-        time.sleep(1) # 等待夹爪张开
+        # print("  > 正在扔入垃圾桶...")
+        # robot.Move_gripper(GRIPPER_OPEN_WIDTH, GRIPPER_SPEED, GRIPPER_FORCE)
+        # time.sleep(1) # 等待夹爪张开
         
-        trajectory_planner.execute_cartesian_trajectory(
-            robot=robot, start_pose=bin_pose, goal_pose=start_pose,
-            planner_name="sqp", speed=0.2, acc=0.1, duration=10.0, num_samples=5
-        )
+        # trajectory_planner.execute_cartesian_trajectory(
+        #     robot=robot, start_pose=bin_pose, goal_pose=start_pose,
+        #     planner_name="sqp", speed=0.2, acc=0.1, duration=10.0, num_samples=5
+        # )
 
 
         print("\n  ✓ 完整抓取与放置序列执行完毕！")
@@ -360,8 +369,8 @@ def Grasp_api(workspace_mask_path):
 
 if __name__ == '__main__':
     # --- 步骤1: 动态生成最新的工作区掩码 ---
-    YOLO_MODEL_PATH = "/home/wmx/graspnet-baseline/robot-stain-perception/weights/best.pt"
-    OUTPUT_MASK_PATH = "/home/wmx/graspnet-baseline/mask.png"
+    YOLO_MODEL_PATH = "/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp/yolo8l_batch8_run1.pt"
+    OUTPUT_MASK_PATH = "/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp/generated_masks"
     CONF_THRESHOLD = 0.5
 
     print("--- 正在生成工作区掩码 ---")
