@@ -134,7 +134,7 @@ def get_and_process_data(data_dir):
 
     # ========================= END: 修改部分 =========================
 
-    mask_path = '/home/wmx/graspnet-baseline/mask.png'
+    mask_path = '/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp/doc/example_data/workspace_mask.png'
     resized_path = os.path.join(data_dir, "workspace_mask_640x480.png")  # 也可以覆盖原图，见注释
 
     # 1) 读取并resize到 640x480（W,H），用最近邻不混类别

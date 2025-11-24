@@ -4,8 +4,19 @@ import cv2
 import pyrealsense2 as rs
 import numpy as np
 import time
+import os
 # 导入API类
+# 当前这个文件所在的目录：/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# robot-stain-perception/tools 目录
+TOOLS_DIR = os.path.join(ROOT_DIR, "robot-stain-perception", "tools")
+
+# 加到 sys.path 里
+if TOOLS_DIR not in sys.path:
+    sys.path.append(TOOLS_DIR)
 from perception_api_detect import StainPerceptionAPI 
+from grasp_mask_api import generate_and_save_grasp_mask
 
 # --- 任务规划函数 (英文消息) ---
 def plan_cleaning_tasks(detected_stains):
@@ -81,7 +92,7 @@ def visualize_detections_and_plan(image, stains, task_plan):
     return vis_image
 
 def main():
-    MODEL_PATH = "/home/wmx/graspnet-baseline/robot-stain-perception/weights/best.pt"
+    MODEL_PATH = "/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp/yolo8l_batch8_run1.pt"
     
     api = StainPerceptionAPI(MODEL_PATH)
     pipeline = rs.pipeline()

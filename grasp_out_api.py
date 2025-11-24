@@ -65,10 +65,10 @@ GRIPPER_SPEED = 0.1
 GRIPPER_FORCE = 10.0
 
 # ---- 抓取流程配置 ----
-Z_OFFSET = -0.05          # 抓取深度偏移量(米), 正值=更深
+Z_OFFSET = -0.032       # 抓取深度偏移量(米), 正值=更深
 
 # ---- GraspNet模型相关配置 ----
-CHECKPOINT_PATH = "/home/wmx/graspnet-baseline/checkpoints/checkpoint-rs.tar"
+CHECKPOINT_PATH = "/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp/checkpoints/checkpoint-rs.tar"
 NUM_POINT = 20000
 NUM_VIEW = 300
 COLLISION_THRESH = 0.01
@@ -90,8 +90,10 @@ T_newTCP_from_camera = np.array([[ 0.04685863, 0.99888241, -0.00618029, -0.11255
 
 # ---- 预设关键位姿 ----
 # 抓取起始位姿 (拍照位)
-start_pos = np.array([0.5167, 0.2731, -0.0299]) #TODO
-start_euler_deg = np.array([-1.799356e+02, -3.470000e-02, -1.759093e+02])
+start_pos = np.array([0.5127, -0.0077, -0.0288]) #TODO
+
+
+start_euler_deg = np.array([[-179.4118  ,  3.4282, -177.0679 ]])
 start_pose = Pose.from_xyz_rpy(start_pos.tolist(), start_euler_deg.tolist())
 
 # 抓取起始位姿的抬起位姿 
@@ -105,7 +107,7 @@ bin_euler_deg = np.array([178.7773, 12.6751, -167.8946])
 bin_pose = Pose.from_xyz_rpy(bin_pos.tolist(), bin_euler_deg.tolist())
 
 bin_pose_up = bin_pose.copy()
-bin_pose_up[2] += 0.1  # 放置点上抬
+#bin_pose_up[2] += 0.1  # 放置点上抬
 
 # ========================= 函数定义区 ========================= #
 
@@ -255,11 +257,13 @@ def perform_complete_grasp_cycle(net, robot, trajectory_planner, workspace_mask_
     T_C_from_G_raw[:3, :3] = grasp_rotation_corrected
     T_C_from_G_raw[:3, 3] = best_grasp.translation
     print('来自graspnet的位置:', T_C_from_G_raw[:3, 3])
-    T_C_from_G_raw[:2, 3] = center_pixel[0]
-    print('来自yolo的位置:', T_C_from_G_raw[:3, 3])
+    # T_C_from_G_raw[:2, 3] = center_pixel[0]
+    # print('来自yolo的位置:', T_C_from_G_raw[:3, 3])
 
     # b. 计算相对于基座的抓取位姿
     current_pos, current_euler_deg = robot.read_pose(Euler_flag=True)
+    current_pos = np.array(current_pos, dtype=float)
+    current_euler_deg = np.array(current_euler_deg, dtype=float)
     T_B_from_E = pose_euler_to_matrix(np.concatenate([current_pos, current_euler_deg]))
     T_B_from_C = T_B_from_E @ T_newTCP_from_camera
     T_B_from_G_grasp = T_B_from_C @ T_C_from_G_raw
@@ -275,8 +279,9 @@ def perform_complete_grasp_cycle(net, robot, trajectory_planner, workspace_mask_
     final_pos, final_euler = final_pose_vec[:3].tolist(), current_euler_deg.tolist()
     goal_pose = Pose.from_xyz_rpy(final_pos, final_euler)
     
-    goal_pose_up = goal_pose.copy()
-    goal_pose_up[2] += 0.1  # 抓取点上抬10cm以避障
+    
+    # goal_pose_up = goal_pose.copy()
+    # goal_pose_up[2] += 0.1  # 抓取点上抬10cm以避障
     print(f"  > 计算出的最终抓取位姿: pos={np.round(final_pos, 4)}, euler_deg={np.round(final_euler, 4)}")
     
     # --- 4. 执行完整的抓取-放置流程 ---
@@ -297,10 +302,11 @@ def perform_complete_grasp_cycle(net, robot, trajectory_planner, workspace_mask_
         
         print("  > 正在抬升物体...")
         trajectory_planner.execute_cartesian_trajectory(
-            robot=robot, start_pose=goal_pose, goal_pose=goal_pose_up,
+            robot=robot, start_pose=goal_pose, goal_pose=start_pose,
             planner_name="s_curve", speed=0.2, acc=0.1, duration=10.0, num_samples=5
         )
-        
+        robot.Move_gripper(0.1, GRIPPER_SPEED, GRIPPER_FORCE)
+        time.sleep(1) # 等待夹爪闭合稳定
         # print("  > 正在前往垃圾桶...")
         # trajectory_planner.execute_cartesian_trajectory(
         #     robot=robot, start_pose=goal_pose_up, goal_pose=bin_pose_up,
@@ -348,11 +354,11 @@ def Grasp_api(workspace_mask_path):
             
             # --- 2. 移动到预设的拍照位置 ---
             print("-> 正在移动到拍照起始位姿...")
-            robot.MoveL(binstart_pos_up.tolist(), binstart_euler_deg_up.tolist(), speed=ROBOT_SPEED, acc=ROBOT_ACC)
-            robot.MoveL(start_pos.tolist(), start_euler_deg.tolist(), speed=ROBOT_SPEED, acc=ROBOT_ACC)
+            # robot.MoveL(binstart_pos_up.tolist(), binstart_euler_deg_up.tolist(), speed=ROBOT_SPEED, acc=ROBOT_ACC)
+            # robot.MoveL(start_pos.tolist(), start_euler_deg.tolist(), speed=ROBOT_SPEED, acc=ROBOT_ACC)
 
             # --- 3. 调用核心函数，执行从感知到放置的全过程 ---
-            success = perform_complete_grasp_cycle(net, robot, trajectory_planner, workspace_mask_path,center_pixel)
+            success = perform_complete_grasp_cycle(net, robot, trajectory_planner, workspace_mask_path)
 
             # --- 4. 根据结果打印信息 ---
             if success:
@@ -370,11 +376,11 @@ def Grasp_api(workspace_mask_path):
 if __name__ == '__main__':
     # --- 步骤1: 动态生成最新的工作区掩码 ---
     YOLO_MODEL_PATH = "/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp/yolo8l_batch8_run1.pt"
-    OUTPUT_MASK_PATH = "/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp/generated_masks"
+    OUTPUT_MASK_PATH = "/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp/generated_masks/mask.png"
     CONF_THRESHOLD = 0.5
 
     print("--- 正在生成工作区掩码 ---")
-    saved_mask_path, completed_grasp , center_pixel = generate_and_save_grasp_mask(
+    saved_mask_path, completed_grasp  = generate_and_save_grasp_mask(
         model_weights_path=YOLO_MODEL_PATH,
         output_path=OUTPUT_MASK_PATH,
         confidence_threshold=CONF_THRESHOLD
@@ -383,7 +389,7 @@ if __name__ == '__main__':
     if saved_mask_path and not completed_grasp:
         print(f"✓ 掩码已生成: {saved_mask_path}")
         # --- 步骤2: 启动抓取主程序 ---
-        Grasp_api(saved_mask_path,center_pixel)
+        Grasp_api(saved_mask_path)
     elif completed_grasp:
         print("✓ 工作区已清洁，无需抓取。")
     else:

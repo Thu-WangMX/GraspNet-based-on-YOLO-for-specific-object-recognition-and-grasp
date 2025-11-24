@@ -147,3 +147,32 @@ class RealsenseAPI:
         print("正在关闭 RealSense 相机管道...")
         for pipe in self.pipes:
             pipe.stop()
+            
+            
+    def get_intrinsics(self):
+            """
+            返回主相机（第一个设备）的相机内参。
+            格式：一个 dict，至少包含 fx, fy, ppx, ppy，这几个键是
+            perception_api_detect.py 里显式检查的。
+            """
+            if not hasattr(self, "profiles") or not self.profiles:
+                raise RuntimeError("RealSense 尚未初始化，无法获取内参。")
+
+            # 使用第一个相机的 profile
+            device_id = self.device_ls[0]
+            profile = self.profiles[device_id]
+
+            # 取彩色相机的内参（与 bgr_image 对应）
+            color_stream = profile.get_stream(rs.stream.color).as_video_stream_profile()
+            intr = color_stream.get_intrinsics()
+
+            camera_intrinsics = {
+                "fx": intr.fx,
+                "fy": intr.fy,
+                "ppx": intr.ppx,   # 注意这里键名是 ppx / ppy
+                "ppy": intr.ppy,
+                "width": intr.width,
+                "height": intr.height,
+                "depth_scale": self.depth_scale,  # 你在 __init__ 里算好的
+            }
+            return camera_intrinsics

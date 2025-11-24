@@ -42,7 +42,7 @@ def generate_and_save_grasp_mask(model_weights_path,
         
         # 【修改点 1】: 调用 detect_stains 需要传入相机内参
         # 假设 realsense_api 可以提供内参
-        camera_intrinsics = realsense_api.get_intrinsics_as_dict() 
+        camera_intrinsics = realsense_api.get_intrinsics()
 
         print("📷 正在捕获稳定的图像帧...")
         bgr_image, depth_image_m = realsense_api.get_frames()
@@ -96,7 +96,7 @@ def generate_and_save_grasp_mask(model_weights_path,
             return None, None
         print("✅ 保存成功！")
 
-        return output_path, center_pose
+        return output_path, False
 
     except Exception as e:
         import traceback
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     from PIL import Image
 
     # --- 配置参数 ---
-    YOLO_MODEL_PATH = "/home/wmx/graspnet-baseline/robot-stain-perception/weights/best.pt"
+    YOLO_MODEL_PATH = "/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp/yolo8l_batch8_run1.pt"
     OUTPUT_MASK_PATH = "/home/wmx/graspnet-baseline/mask.png"
     CONF_THRESHOLD = 0.5
 
