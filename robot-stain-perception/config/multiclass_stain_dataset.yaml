@@ -1,0 +1,14 @@
+# multiclass_stain_dataset.yaml
+
+# Path to the dataset root directory
+path: ./multiclass_yolo_data
+train: train/images
+val: val/images
+
+# Number of classes
+nc: 2
+
+# Class names in order of their Class ID (0, 1, ...)
+names:
+  0: liquid
+  1: solid

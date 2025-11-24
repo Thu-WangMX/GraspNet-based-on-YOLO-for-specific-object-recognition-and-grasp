@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Conda/Venv environments
+stain_env/
+pyroki_env/
+hd10k_env/
+venv/
+.env
+
+# IDE / Editor folders
+.idea/
+.vscode/
+
+# Dataset Folders - 非常重要，数据集不应该上传到代码仓库
+data/
+yolo_data/
+yolo_annotation/
+mix_yolo_annotation/
+multiclass_yolo_data/
+multiclass_yolo_seg_data/
+my_cola_images/
+HD10K/
+
+wandb/
+
+# Output folders from scripts
+runs/
+checkpoints/
+*_output/
+*_predictions/
+generated_masks/
+finetuned_cola_predictions/
+cv_predictions/
+
+#workspace
+cola_annotation_workspace/
+
+# Large Model Files
+*.pt
+*.pth
+*.onnx
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# OS-specific files
+.DS_Store
+Thumbs.db

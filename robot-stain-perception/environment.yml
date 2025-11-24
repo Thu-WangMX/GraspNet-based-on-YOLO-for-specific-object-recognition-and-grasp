@@ -1,0 +1,34 @@
+# environment.yml for Robot Stain Perception Project
+# This environment contains all necessary dependencies for running the perception node.
+
+name: stain_env
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+
+dependencies:
+  # --- 核心依赖 (Core Dependencies) ---
+  - python=3.10
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.1
+
+  # --- 图像与科学计算 (Image & Scientific Computing) ---
+  - opencv
+  - scikit-learn  # 用于数据集划分工具脚本 (split_yolo_dataset.py)
+  - numpy         # 会被自动安装，但明确写出是个好习惯
+
+  # --- 实用工具 (Utilities) ---
+  - tqdm          # 在工具脚本中提供进度条
+  - matplotlib    # YOLOv8内部用它来生成结果图
+  
+  # --- Pip and Pip Packages ---
+  # 首先安装pip本身
+  - pip
+  # 然后列出需要通过pip安装的包
+  - pip:
+    - ultralytics  # 关键: YOLOv8的核心库
+    - pyrealsense2 # 关键: Intel RealSense相机的Python接口
+    - Pillow       # 强大的图像处理库, 很多库都依赖它
