@@ -65,7 +65,7 @@ GRIPPER_SPEED = 0.1
 GRIPPER_FORCE = 10.0
 
 # ---- 抓取流程配置 ----
-Z_OFFSET = -0.032       # 抓取深度偏移量(米), 正值=更深
+Z_OFFSET = -0.025      # 抓取深度偏移量(米), 正值=更深
 
 # ---- GraspNet模型相关配置 ----
 CHECKPOINT_PATH = "/home/wmx/GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp/checkpoints/checkpoint-rs.tar"

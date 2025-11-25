@@ -252,11 +252,3 @@ This project builds upon and/or is inspired by:
 
 Please also cite the corresponding original papers / repositories if you use this project in academic work.
 
----
-
-## 📄 8. License
-
-This repository contains components from multiple upstream projects (GraspNet baseline, YOLOv8, Flexiv RDK examples, etc.).  
-Please check and comply with the licenses of all third-party components before redistributing or using this code in commercial applications.
-
-You can add your own license here (e.g. MIT/BSD/GPL) once you have verified compatibility.
