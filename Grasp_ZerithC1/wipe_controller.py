@@ -3,7 +3,7 @@
 
 import json
 from pathlib import Path
-from Grasp_ZerithC1.FlexivRobot import FlexivRobot
+from FlexivRobot import FlexivRobot
 
 class WipeController:
     """

@@ -2,12 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-GraspNet与Flexiv机器人集成控制脚本
-功能：
-1. 从RealSense相机获取实时图像。
-2. 使用GraspNet检测抓取位姿。
-3. 对位姿进行坐标系修正。
-4. 控制Flexiv机器人执行抓取。
+新增筛选best位姿过程
 """
 
 import os
@@ -39,20 +34,20 @@ from FlexivRobot import FlexivRobot
 # ========================= 用户配置区 ========================= #
 
 # ---- 机器人相关配置 ----
-ROBOT_SN =  'Rizon4s-062958'
-GRIPPER_NAME ='Flexiv-GN01'
+ROBOT_SN = 'Rizon4R-062032'      
+GRIPPER_NAME = 'GripperFlexivModbus' 
 
 ROBOT_SPEED = 0.1
 ROBOT_ACC = 0.1
 
 # ---- 夹爪相关配置 ----
-GRIPPER_OPEN_WIDTH = 0.1  # 夹爪预抓取时张开的宽度(米)
+GRIPPER_OPEN_WIDTH = 0.08  # 夹爪预抓取时张开的宽度(米)
 GRIPPER_SPEED = 0.1
 GRIPPER_FORCE = 10.0
 
 # ---- 抓取流程配置 ----
 PRE_GRASP_DISTANCE = 0.10 # 预抓取和抓取后抬升的距离(米)
-Z_OFFSET = -0.05          # 抓取深度偏移量(米), 正值=更深
+Z_OFFSET = -0.06          # 抓取深度偏移量(米), 正值=更深
 
 # ---- GraspNet模型相关配置 (保持不变) ----
 CHECKPOINT_PATH = "/home/lrh/graspnet-baseline/checkpoints/checkpoint-rs.tar"
@@ -60,6 +55,9 @@ NUM_POINT = 20000
 NUM_VIEW = 300
 COLLISION_THRESH = 0.01
 VOXEL_SIZE = 0.01
+
+W_GRASP_SCORE = 0.5  # GraspNet原始抓取分数的权重 (0.0 ~ 1.0)
+W_ORIENTATION_SCORE = 0.5 # 姿态相似度分数的权重 (0.0 ~ 1.0)
 
 # ---- 工作区掩码与相机内参 (保持不变) ----
 WORKSPACE_MASK_PATH = "/home/lrh/graspnet-baseline/doc/example_data/workspace_mask_640x480.png"
@@ -69,6 +67,8 @@ INTRINSIC_MATRIX = np.array([
     [0., 0., 1.]
 ])
 FACTOR_DEPTH = 1000.0
+
+WAY_CHOICE = 2
 
 # # ---- 手眼标定与工具TCP配置  ----
 
@@ -87,6 +87,9 @@ T_newTCP_from_camera = np.array([[ 0.04685863, 0.99888241, -0.00618029, -0.11255
 
 
 
+bin_pos = [0.177 , 0.3055 ,0.3468]
+bin_euler_deg = [177.6441  ,  1.1419 ,-122.3548]
+bin_pose = Pose.from_xyz_rpy(bin_pos, bin_euler_deg )
 # ========================= 函数定义区========================= #
 
 # --- GraspNet 相关函数 (完全不变) ---
@@ -224,20 +227,108 @@ def matrix_to_pose_euler(matrix):
     pose[3:] = R.from_matrix(matrix[:3, :3]).as_euler('xyz', degrees=True)
     return pose
 
-# ========================= 主函数执行区 ========================= #
+# ========================= 【新增】两种独立的抓取选择函数 =========================
+
+def select_grasp_by_weighted_score(gg, T_B_from_E_start, R_correct_combined, T_newTCP_from_camera, z_offset_matrix):
+    """
+    方法一：加权分数法。
+    结合GraspNet分数和机器人姿态相似度，选择综合得分最高的抓取。
+    """
+    print(f"--- 共检测到 {len(gg)} 个抓取位姿 ---")
+    if len(gg) == 0:
+        return None
+
+    best_grasp = None
+    max_weighted_score = -1.0
+    
+    # 预计算参考旋转矩阵和相机到基座的变换
+    R_reference_in_base = T_B_from_E_start[:3, :3]
+    T_B_from_C = T_B_from_E_start @ T_newTCP_from_camera
+    
+    print("--- 使用“加权分数法”评估所有抓取 ---")
+    for i, grasp in enumerate(gg):
+        # a. 计算在机器人基坐标系下的最终抓取位姿矩阵
+        grasp_rotation_corrected = grasp.rotation_matrix @ R_correct_combined
+        T_C_from_G_raw = np.eye(4)
+        T_C_from_G_raw[:3, :3] = grasp_rotation_corrected
+        T_C_from_G_raw[:3, 3] = grasp.translation
+        T_B_from_G_grasp = T_B_from_C @ T_C_from_G_raw
+        T_B_from_G_final = z_offset_matrix @ T_B_from_G_grasp
+        
+        # b. 提取候选姿态，并与参考姿态比较
+        R_candidate_in_base = T_B_from_G_final[:3, :3]
+        R_relative = R_candidate_in_base @ R_reference_in_base.T
+        angle_diff_rad = R.from_matrix(R_relative).magnitude()
+
+        # c. 计算分数
+        orientation_score = 1.0 - (angle_diff_rad / np.pi)
+        graspnet_score = grasp.score
+        weighted_score = (W_GRASP_SCORE * graspnet_score) + (W_ORIENTATION_SCORE * orientation_score)
+        
+        print(f"  - 评估抓取 #{i+1}: grasp_score={graspnet_score:.4f}, orientation_score={orientation_score:.4f} -> weighted_score={weighted_score:.4f}")
+
+        # d. 寻找最高分
+        if weighted_score > max_weighted_score:
+            max_weighted_score = weighted_score
+            best_grasp = grasp
+
+    if best_grasp:
+        print(f"  ✓ 已找到最佳抓取! 最高加权分: {max_weighted_score:.4f}")
+    return best_grasp
+
+
+def select_grasp_by_angle_filter(gg, angle_threshold_deg=30.0):
+    """
+    方法二：排序+角度筛选法。
+    选择GraspNet分数最高，且抓取方向与相机Z轴夹角小于阈值的抓取。
+    """
+    print(f"--- 共检测到 {len(gg)} 个抓取位姿 ---")
+    if len(gg) == 0:
+        return None
+
+    gg.sort_by_score()
+    print(f"--- 使用“角度筛选法”评估 {len(gg)} 个已排序的抓取 ---")
+
+    for i, grasp in enumerate(gg):
+        # a. 计算当前抓取与相机Z轴的夹角
+        camera_z_axis = np.array([0, 0, 1])
+        grasp_approach_vector = grasp.rotation_matrix[:, 0]
+        dot_product = np.dot(camera_z_axis, grasp_approach_vector)
+        angle_rad = np.arccos(np.clip(dot_product, -1.0, 1.0))
+        angle_deg = np.degrees(angle_rad)
+        print(f"  - 评估抓取 #{i+1}: 分数={grasp.score:.4f}, 与Z轴夹角={angle_deg:.2f}度")
+
+        # b. 检查夹角是否小于阈值
+        if angle_deg < angle_threshold_deg:
+            print(f"  ✓ 已找到最佳抓取! (第 {i+1} 个)，夹角 {angle_deg:.2f} < {angle_threshold_deg} 度。")
+            return grasp # 找到第一个就直接返回
+
+        print(f"✗ 未能找到一个与Z轴夹角小于 {angle_threshold_deg} 度的方案。")
+        #return None
+
+
+
+
+
 def main():
     # ---- 1. 初始化 ----
     net = get_net()
-    # 使用FlexivRobot类进行初始化
-    robot = FlexivRobot(ROBOT_SN, GRIPPER_NAME, frequency = 100.0, remote_control=True, gripper_init=False)
-    # 切换到PRIMITIVE模式以执行MoveL等指令
+    robot = FlexivRobot(ROBOT_SN, GRIPPER_NAME, frequency = 100.0, remote_control=True, gripper_init=True)
     robot.switch_PRIMITIVE_Mode()
+    robot.move_tcp_home()
+    robot.Move_gripper(GRIPPER_OPEN_WIDTH)
+    _init_tcp_position, _init_tcp_rpy = robot.read_pose(Euler_flag=True)
+    _init_tcp_position[0] -= 0.07
+    _init_tcp_position[1] -= 0.1
+    _init_tcp_position[2] += 0.05
+    robot.MoveL(_init_tcp_position, _init_tcp_rpy)
     print("✓ 机器人初始化完成并进入PRIMITIVE模式。")
 
     try:
         while True:
-            # --- 2. 感知 ---
-            input("\n按回车键开始新一轮抓取检测...")
+
+            # --- 3. 感知 ---
+            print("\n--------------- 步骤1: 场景感知 ---------------")
             color_rgb, depth = get_data_from_realsense()
             end_points, cloud = process_data(color_rgb, depth)
             gg = get_grasps(net, end_points)
@@ -245,161 +336,108 @@ def main():
                 gg = collision_detection(gg, cloud)
 
             if len(gg) == 0:
-                print("✗ 未检测到有效的抓取位姿。")
+                print("✗ 本轮未检测到有效的抓取位姿。")
+                continue
+            
+            # --- 4. 获取机器人位姿并选择最佳抓取 ---
+            print("\n--------------- 步骤2: 筛选最佳抓取 ---------------")
+            current_pos, current_euler_deg = robot.read_pose(Euler_flag=True)
+            start_pose = Pose.from_xyz_rpy(current_pos, current_euler_deg)
+            start_pose_vec = current_pos + current_euler_deg
+            T_B_from_E_start = pose_euler_to_matrix(start_pose_vec)
+            
+            best_grasp = None
+            if WAY_CHOICE == 1:
+                # 方法一需要的常量矩阵
+                rot_z_neg180 = R.from_euler('z', 180, degrees=True)
+                rot_y_neg90 = R.from_euler('y', 90, degrees=True)
+                final_fix_rotation = rot_y_neg90 * rot_z_neg180
+                R_correct_combined = final_fix_rotation.as_matrix()
+                z_offset_matrix = np.eye(4); z_offset_matrix[2, 3] = Z_OFFSET
+                
+                best_grasp = select_grasp_by_weighted_score(gg, T_B_from_E_start, R_correct_combined, T_newTCP_from_camera, z_offset_matrix)
+            elif WAY_CHOICE == 2:
+                best_grasp = select_grasp_by_angle_filter(gg, angle_threshold_deg=40.0)
+            else:
+                print("✗ 无效选项，请重新开始。")
                 continue
 
-            # --- 3. 决策: 选择最佳抓取并应用所有坐标系修正  ---
-            gg.sort_by_score()
-            best_grasp = gg[0]
-            grasp_translation_in_camera = best_grasp.translation
-            grasp_rotation_in_camera = best_grasp.rotation_matrix
-            
-            print(f"--------------- 检测到最佳抓取 ---------------")
-            print(f"  - 分数: {best_grasp.score:.4f}, 目标宽度: {best_grasp.width:.4f} m")
-            vis_grasps(gg, cloud)
+            if best_grasp is None:
+                print("✗ 未能根据所选方法找到合适的抓取位姿。")
+                continue
 
-            # --- 坐标系修正) ---
-            # 修正A: 局部工具坐标系复合修正
-            # rot_z_neg90 = R.from_euler('z', -90, degrees=True)
-            # rot_x_neg90 = R.from_euler('x', -90, degrees=True)
-            # final_fix_rotation = rot_z_neg90 * rot_x_neg90
-            # final_fix_rotation =  rot_x_neg90
-            # R_correct_combined = final_fix_rotation.as_matrix()
-            
+            # --- 5. 对选出的 best_grasp 进行位姿计算 ---
+            print(f"\n--------------- 步骤3: 计算机器人目标位姿 ---------------")
+            print(f"  - 最终选定抓取: 分数={best_grasp.score:.4f}, 宽度={best_grasp.width:.4f} m")
+            vis_grasps(gg, cloud) # 可视化最佳抓取
 
+            # a. 定义常量变换矩阵 (与方法一共享)
             rot_z_neg180 = R.from_euler('z', 180, degrees=True)
             rot_y_neg90 = R.from_euler('y', 90, degrees=True)
             final_fix_rotation = rot_y_neg90 * rot_z_neg180
             R_correct_combined = final_fix_rotation.as_matrix()
-            grasp_rotation_in_camera = grasp_rotation_in_camera @ R_correct_combined
-            
+            T_B_from_C = T_B_from_E_start @ T_newTCP_from_camera
+            z_offset_matrix = np.eye(4); z_offset_matrix[2, 3] = Z_OFFSET
+
+            # b. 计算最终机器人目标位姿
+            grasp_rotation_corrected = best_grasp.rotation_matrix @ R_correct_combined
             T_C_from_G_raw = np.eye(4)
-            T_C_from_G_raw[:3, :3] = grasp_rotation_in_camera
-            T_C_from_G_raw[:3, 3] = grasp_translation_in_camera
-
-            # 修正B: 手眼标定镜像修正
-            # mirror_fix_X = np.diag([-1, 1, 1, 1])
-            # T_C_from_G_corrected = mirror_fix_X @ T_C_from_G_raw
-
-            # --- 4. 计算机器人最终需要运动到的多个位姿 (接口修改) ---
-            # 【修改】使用Flexiv的read_pose获取当前位姿
-            current_pos, current_euler_deg = robot.read_pose(Euler_flag=True)
-            start_pose = Pose.from_xyz_rpy(current_pos, current_euler_deg)
-            current_pose_vec = current_pos + current_euler_deg
-            
-            T_B_from_E = pose_euler_to_matrix(current_pose_vec)
-            
-            
-            
-            # print("自己计算出的:",T_B_from_E)
-            # current_pos = robot.read_pose(Euler_flag=False)
-            # T_B_from_E_2 = robot.quat2matrix(current_pos[3:])
-            # print("号哥计算的:",T_B_from_E_2)
-
-
-            T_B_from_C = T_B_from_E @ T_newTCP_from_camera
-            T_B_from_G_grasp = T_B_from_C @ T_C_from_G_raw # 如果使用镜像修正，这里用 T_C_from_G_corrected
-            
-
-            # 修正C: Z轴深度偏移
-            z_offset_matrix = np.eye(4)
-            z_offset_matrix[2, 3] = Z_OFFSET
+            T_C_from_G_raw[:3, :3] = grasp_rotation_corrected
+            T_C_from_G_raw[:3, 3] = best_grasp.translation
+            T_B_from_G_grasp = T_B_from_C @ T_C_from_G_raw
             T_B_from_G_final = z_offset_matrix @ T_B_from_G_grasp
 
-            
-            # --- 计算预抓取和抓取后位姿 ---
-            pre_grasp_offset_matrix = np.eye(4)
-            pre_grasp_offset_matrix[2, 3] = -PRE_GRASP_DISTANCE
-            T_B_from_G_pre_grasp = T_B_from_G_final @ pre_grasp_offset_matrix
-            
-            # 将矩阵转换为机器人可执行的 [位置, 欧拉角] 格式
+            # --- 6. 执行抓取 ---
+            print("\n--------------- 步骤4: 执行抓取序列 ---------------")
             final_pose_vec = matrix_to_pose_euler(T_B_from_G_final)
             final_pos, final_euler = final_pose_vec[:3].tolist(), final_pose_vec[3:].tolist()
+            print(" final_euler前", final_euler)
+            if( final_euler[2] > -90 and final_euler[2] < 90 ):
+                print(" final_euler[2] > -90 and final_euler[2] < 90 ")
+                final_euler[2] -= 180
+            elif( final_euler[2] > 90 ):
+                print(" final_euler[2] > 90 ")
+                final_euler[2] -= 360
+            elif( final_euler[2] < -270 ):
+                print(" final_euler[2] < -270 ")
+                final_euler[2] += 180
+            print(" final_euler后", final_euler)
             goal_pose = Pose.from_xyz_rpy(final_pos, final_euler)
-            pre_grasp_pose_vec = matrix_to_pose_euler(T_B_from_G_pre_grasp)
-            pre_pos, pre_euler = pre_grasp_pose_vec[:3].tolist(), pre_grasp_pose_vec[3:].tolist()
-            
-            print(f"  > 计算出的预抓取位姿: pos={np.round(pre_pos, 4)}, euler_deg={np.round(pre_euler, 4)}")
-            print(f"  > 计算出的最终抓取位姿: pos={np.round(final_pos, 4)}, euler_deg={np.round(final_euler, 4)}")
 
-            # --- 5. 安全确认并执行完整抓取序列 (接口修改) ---
+            print(f"  > 计算出的最终抓取位姿: pos={np.round(final_pos, 4)}, euler_deg={np.round(final_euler, 4)}")
+            
             confirm = input("  ? 确认执行抓取序列? (y/n): ")
             if confirm.lower() == 'y':
+                # ... (机器人移动代码保持不变) ...
+                print("  > 正在打开夹爪...")
+                robot.Move_gripper(GRIPPER_OPEN_WIDTH, GRIPPER_SPEED, GRIPPER_FORCE)
+                trajectory_planner = TrajectoryPlanner()
+                trajectory_planner.execute_cartesian_trajectory(
+                    robot=robot, start_pose=start_pose, goal_pose=goal_pose, planner_name="sqp",
+                    speed=0.2, acc=0.1, duration=10.0, num_samples=5, zoneRadius="Z100")
                 
-                 # b. 移动到预抓取位置
-                #print(f"  > 正在移动到预抓取位姿...")
-                #robot.MoveL(pre_pos, pre_euler, speed=ROBOT_SPEED, acc=ROBOT_ACC)
+                print(f"  > 正在闭合夹爪...")
+                robot.Move_gripper(0, GRIPPER_SPEED, GRIPPER_FORCE)
 
-                #robot.MovePTP(pre_pos, pre_euler, 10)
+                print(f"  > 正在回到初始位置...")
+                trajectory_planner.execute_cartesian_trajectory(
+                    robot=robot, start_pose=goal_pose, goal_pose=start_pose, planner_name="sqp",
+                    speed=0.2, acc=0.1, duration=10.0, num_samples=5, zoneRadius="Z100")
+                print("\n  ✓ 抓取序列执行完毕！")
                 
+
+                print(f"  > 正在前往垃圾桶...")
+                trajectory_planner.execute_cartesian_trajectory(
+                    robot=robot, start_pose=start_pose, goal_pose=bin_pose, planner_name="sqp",
+                    speed=0.2, acc=0.1, duration=10.0, num_samples=5, zoneRadius="Z100")
                 print("  > 正在打开夹爪...")
                 robot.Move_gripper(GRIPPER_OPEN_WIDTH, GRIPPER_SPEED, GRIPPER_FORCE)
 
-                # c. 移动到最终抓取位置
-                print(f"  > 正在下降到抓取位姿...")
-                #robot.MoveL(final_pos, final_euler, speed=ROBOT_SPEED, acc=ROBOT_ACC)
-                #robot.MovePTP(final_pos, final_euler, 10)
-
-
-                trajectory_planner = TrajectoryPlanner()
-
-                # plan a trajectory using SQP
-                sqp_trajectory = trajectory_planner.plan_with_sqp(
-                        start_pose,
-                        goal_pose,
-                        duration=10,
-                        num_samples=10,
-                        max_velocity=2,
-                    )
-                for pose in sqp_trajectory:
-                    print("sqp_trajectory pose:", pose)
-
-                # plan a trajectory using S Curve
-                s_curve_trajectory = trajectory_planner.plan_with_s_curve(
-                        start_pose,
-                        goal_pose,
-                        duration=10,
-                        num_samples=10,
-                    )
-                for pose in s_curve_trajectory:
-                    print("S-Curve trajectory pose:", pose)
-
-                # if no robot instance is available, set robot=None
-                # plan a trajectory but not execute
+                print(f"  > 正在回到初始位置...")
                 trajectory_planner.execute_cartesian_trajectory(
-                    robot=robot,  # Replace with actual robot instance if available
-                    start_pose=start_pose,
-                    goal_pose=goal_pose,
-                    planner_name="s_curve",  # or "s_curve". s_curve is faster
-                    speed=0.2,
-                    acc=0.1,
-                    duration=10.0,   # total trajectory time, define the time step of each point as duration/num_samples
-                    num_samples=5,
-                    zoneRadius="Z100"
-                )
-                print("111111111111111")
-               
-                # d. 闭合夹爪
-                print(f"  > 正在闭合夹爪至宽度 {best_grasp.width:.4f} m...")
-                robot.Move_gripper(0, GRIPPER_SPEED, GRIPPER_FORCE)
-                
-                # e. 垂直向上移动，抬起物体
-                print(f"  > 正在抬升物体...")
-                # robot.MoveL(pre_pos, pre_euler, speed=ROBOT_SPEED/2, acc=ROBOT_ACC)
+                    robot=robot, start_pose=bin_pose, goal_pose=start_pose, planner_name="sqp",
+                    speed=0.2, acc=0.1, duration=10.0, num_samples=5, zoneRadius="Z100")
 
-                trajectory_planner.execute_cartesian_trajectory(
-                    robot=robot,  # Replace with actual robot instance if available
-                    start_pose=goal_pose,
-                    goal_pose=start_pose,
-                    planner_name="s_curve",  # or "s_curve". s_curve is faster
-                    speed=0.2,
-                    acc=0.1,
-                    duration=10.0,   # total trajectory time, define the time step of each point as duration/num_samples
-                    num_samples=5,
-                    zoneRadius="Z100"
-                )
-                
-                print("\n  ✓ 抓取序列执行完毕！")
             else:
                 print("  - 移动已取消。")
 
@@ -407,7 +445,6 @@ def main():
         print("\n程序被用户中断。")
     finally:
         if 'robot' in locals():
-            # 【修改】使用Flexiv的Stop方法
             robot.Stop()
             print("\n程序退出，机器人已停止。")
 
