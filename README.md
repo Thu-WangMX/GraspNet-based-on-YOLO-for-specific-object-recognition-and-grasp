@@ -66,16 +66,13 @@ The script will:
 
 | 垃圾类别                   | GraspNet 预测抓取示例                     |
 |---------------------------|------------------------------------------|
-| 细小纸巾                  | ![Small](docs/grasps/tissue_small.png)  |
-| 薄层纸巾（2.5 cm 左右）   | ![Thin2.5](docs/grasps/tissue_thin_2_5cm.png) |
-| 薄层纸巾（1.0 cm 左右）   | ![Thin1.0](docs/grasps/tissue_thin_1_0cm.png) |
-| 成团纸巾                  | ![Ball](docs/grasps/tissue_ball.png)    |
-| 大块纸巾（4 张）          | ![4sheet](docs/grasps/tissue_large_4sheet.png) |
-| 湿掉的纸巾                | ![Wet](docs/grasps/tissue_wet.png)      |
-| 单张纸巾                  | ![Single](docs/grasps/tissue_single.png)|
-| 卫生巾（成团）            | ![Pad](docs/grasps/sanitary_pad_ball.png) |
-| 湿巾                      | ![Wipe](docs/grasps/wet_wipe.png)       |
-| 烟头                      | ![Cigarette](docs/grasps/cigarette.png) |
+| tissue_small                  | ![Small](docs/grasps/tissue_small.png)  |
+| tissue_thin_2_5cm   | ![Thin2.5](docs/grasps/tissue_thin_2_5cm.png) |
+| tissue_thin_1_0cm   | ![Thin1.0](docs/grasps/tissue_thin_1_0cm.png) |
+| tissue_large_4sheet          | ![4sheet](docs/grasps/tissue_large_4sheet.png)   |
+| sanitary_pad_ball            | ![Pad](docs/grasps/sanitary_pad_ball.png) |
+| tissue_wet                      | ![Wipe](docs/grasps/wet_wipe.png)       |
+| cigarette                      | ![Cigarette](docs/grasps/cigarette.png) |
 
 ## 🙏 Acknowledgements
 
