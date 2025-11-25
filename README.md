@@ -1,6 +1,7 @@
 # 🤖 GraspNet-based-on-YOLO-for-specific-object-recognition-and-grasp
 
-A small research project that connects **YOLOv8**, **GraspNet baseline** and a **Flexiv robot** for stain / object–aware grasping on a tabletop.
+While GraspNet can generate a large number of object grasping poses, it does not explicitly select the object to be grasped as the grasping target. Instead, it generates grasping poses for all objects within the field of view, making it unsuitable for grasping specific objects.
+So we provide this, a small research project that connects **YOLOv8**, **GraspNet baseline** and a **Flexiv robot** for stain / object–aware grasping on a tabletop.
 
 ---
 
