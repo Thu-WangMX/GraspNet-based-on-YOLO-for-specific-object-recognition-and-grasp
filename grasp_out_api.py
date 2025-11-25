@@ -37,7 +37,7 @@ if TOOLS_DIR not in sys.path:
 
 from graspnet import GraspNet, pred_decode
 from graspnetAPI import GraspGroup
-from trajectory_planner import Pose, TrajectoryPlanner
+from Grasp_ZerithC1.trajectory_planner import Pose, TrajectoryPlanner
 from collision_detector import ModelFreeCollisionDetector
 from data_utils import CameraInfo, create_point_cloud_from_depth_image
 

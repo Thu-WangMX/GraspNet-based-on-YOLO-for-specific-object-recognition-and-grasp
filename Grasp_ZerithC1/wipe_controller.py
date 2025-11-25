@@ -3,7 +3,7 @@
 
 import json
 from pathlib import Path
-from FlexivRobot import FlexivRobot
+from Grasp_ZerithC1.FlexivRobot import FlexivRobot
 
 class WipeController:
     """
@@ -101,7 +101,7 @@ class WipeController:
     
 
 ###调用示例###
-from wipe_controller import WipeController
+from Grasp_ZerithC1.wipe_controller import WipeController
 self.wipe_handler = WipeController(self.robot)
 def perform_wipe_task(self, TRAJECTORY_JSON_PATH):
         """

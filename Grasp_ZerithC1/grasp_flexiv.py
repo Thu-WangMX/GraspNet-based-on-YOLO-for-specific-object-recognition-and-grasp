@@ -27,14 +27,14 @@ sys.path.append(os.path.join(GRASPNET_ROOT, 'utils'))
 
 from graspnet import GraspNet, pred_decode
 from graspnetAPI import GraspGroup
-from trajectory_planner import Pose, TrajectoryPlanner
+from Grasp_ZerithC1.trajectory_planner import Pose, TrajectoryPlanner
 from collision_detector import ModelFreeCollisionDetector
 from data_utils import CameraInfo, create_point_cloud_from_depth_image
 
 # --- 机器人控制库 ---
 from scipy.spatial.transform import Rotation as R
 # 【修改】导入您提供的FlexivRobot控制类
-from FlexivRobot import FlexivRobot
+from Grasp_ZerithC1.FlexivRobot import FlexivRobot
 
 # ========================= 用户配置区 ========================= #
 
